@@ -1,52 +1,44 @@
+﻿# CMakeList.txt : CMake project for vulkan_guide, include source and define
+# project specific logic here.
+#
+cmake_minimum_required (VERSION 3.8)
+
+project ("vulkan_guide")
+
+
 find_package(Vulkan REQUIRED)
 
-add_library(vkbootstrap STATIC)
-add_library(glm INTERFACE)
-add_library(vma INTERFACE)
+add_subdirectory(third_party)
 
-add_library(stb_image INTERFACE)
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
-add_subdirectory(fastgltf)
-add_subdirectory(fmt EXCLUDE_FROM_ALL)
-add_subdirectory(SDL EXCLUDE_FROM_ALL)
+add_subdirectory(src)
 
-target_sources(vkbootstrap PRIVATE 
-  vkbootstrap/VkBootstrap.h
-  vkbootstrap/VkBootstrap.cpp
-  )
+find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 
-target_include_directories(vkbootstrap PUBLIC vkbootstrap)
-target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
-set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
 
-#both vma and glm and header only libs so we only need the include path
-target_include_directories(vma INTERFACE vma)
 
-target_include_directories(glm INTERFACE glm)
 
-#add_library(sdl2 INTERFACE)
+file(GLOB_RECURSE GLSL_SOURCE_FILES
+    "${PROJECT_SOURCE_DIR}/shaders/*.frag"
+    "${PROJECT_SOURCE_DIR}/shaders/*.vert"
+    "${PROJECT_SOURCE_DIR}/shaders/*.comp"
+    )
 
-#target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )
-#target_link_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Lib )
+foreach(GLSL ${GLSL_SOURCE_FILES})
+  message(STATUS "BUILDING SHADER")
+  get_filename_component(FILE_NAME ${GLSL} NAME)
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  message(STATUS ${GLSL})
+  add_custom_command(
+    OUTPUT ${SPIRV}
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+    DEPENDS ${GLSL})
+  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
 
-#target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
-
-add_library(imgui STATIC)
-
-target_include_directories(imgui PUBLIC imgui)
-
-target_sources(imgui PRIVATE 
-  imgui/imgui.h
-  imgui/imgui.cpp
-
-  imgui/imgui_demo.cpp
-  imgui/imgui_draw.cpp
-  imgui/imgui_widgets.cpp
-  imgui/imgui_tables.cpp
-  imgui/imgui_impl_vulkan.cpp
-  imgui/imgui_impl_sdl2.cpp
-  )
-
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL2::SDL2)
-
-target_include_directories(stb_image INTERFACE stb_image)
+add_custom_target(
+    Shaders 
+    DEPENDS ${SPIRV_BINARY_FILES}
+    )
